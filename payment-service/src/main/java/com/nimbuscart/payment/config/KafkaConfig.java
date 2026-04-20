@@ -1,14 +1,12 @@
-package com.nimbuscart.order.config;
+package com.nimbuscart.payment.config;
 
-import com.nimbuscart.order.dto.OrderEvent;
-import org.apache.kafka.clients.admin.NewTopic;
+import com.nimbuscart.payment.dto.OrderEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
-import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
@@ -23,20 +21,10 @@ public class KafkaConfig {
     private String bootstrapServers;
 
     @Bean
-    public NewTopic orderCreatedTopic() {
-        return TopicBuilder.name("order-created").partitions(3).replicas(1).build();
-    }
-
-    @Bean
-    public NewTopic paymentResultTopic() {
-        return TopicBuilder.name("payment-result").partitions(3).replicas(1).build();
-    }
-
-    @Bean
     public ConsumerFactory<String, OrderEvent> consumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "order-group");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "payment-group");
 
         JsonDeserializer<OrderEvent> deserializer = new JsonDeserializer<>(OrderEvent.class, false);
         deserializer.addTrustedPackages("*");
@@ -46,7 +34,8 @@ public class KafkaConfig {
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, OrderEvent> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, OrderEvent> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        ConcurrentKafkaListenerContainerFactory<String, OrderEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         return factory;
     }
