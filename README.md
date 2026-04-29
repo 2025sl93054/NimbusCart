@@ -17,6 +17,92 @@ User → API Gateway (8080) → Microservices → PostgreSQL / Kafka
 | Order Service | 8083 | Order lifecycle, Feign calls, Kafka producer |
 | Payment Service | 8084 | Mock payments, Kafka consumer/producer |
 
+## 🗺️ Workflow Diagram
+
+```mermaid
+flowchart TD
+    Client(["👤 Client / Browser"])
+
+    subgraph Infrastructure["Infrastructure Layer"]
+        DS["🔍 Discovery Server\nNetflix Eureka · :8761"]
+    end
+
+    subgraph Gateway["API Gateway · :8080"]
+        GW["Spring Cloud Gateway\nRoute & Load Balance"]
+    end
+
+    subgraph Services["Microservices"]
+        US["👤 User Service\n:8081\nRegister · Login · JWT"]
+        PS["📦 Product Service\n:8082\nCRUD · Search · Stock"]
+        OS["🧾 Order Service\n:8083\nOrchestrator · Feign · Kafka"]
+        PAY["💳 Payment Service\n:8084\nMock Payment · Kafka"]
+    end
+
+    subgraph Databases["PostgreSQL Databases"]
+        UDB[("userdb")]
+        PDB[("productdb")]
+        ODB[("orderdb")]
+        PAYDB[("paymentdb")]
+    end
+
+    subgraph Kafka["Apache Kafka"]
+        T1["topic: order-created\n3 partitions"]
+        T2["topic: payment-result\n3 partitions"]
+    end
+
+    %% Client → Gateway
+    Client -->|"HTTP Request"| GW
+
+    %% Gateway ↔ Discovery
+    GW <-->|"Service Lookup"| DS
+    US <-->|"Register / Heartbeat"| DS
+    PS <-->|"Register / Heartbeat"| DS
+    OS <-->|"Register / Heartbeat"| DS
+    PAY <-->|"Register / Heartbeat"| DS
+
+    %% Gateway → Services
+    GW -->|"/api/users/**"| US
+    GW -->|"/api/products/**"| PS
+    GW -->|"/api/orders/**"| OS
+
+    %% Services → Databases
+    US --- UDB
+    PS --- PDB
+    OS --- ODB
+    PAY --- PAYDB
+
+    %% Order flow (sync Feign calls)
+    OS -->|"① Feign: validate user"| US
+    OS -->|"② Feign: get product\n   reduce stock"| PS
+
+    %% Order → Kafka → Payment
+    OS -->|"③ Publish OrderEvent\nstatus: PENDING"| T1
+    T1 -->|"④ Consume\n(payment-group)"| PAY
+
+    %% Payment → Kafka → Order
+    PAY -->|"⑤ Publish PaymentResult\nSUCCESS / FAILED"| T2
+    T2 -->|"⑥ Consume\n(order-group)"| OS
+
+    %% Auth annotation
+    GW -.->|"JWT Validation"| US
+
+    %% Status update
+    OS -->|"⑦ Update status\nCONFIRMED / PAYMENT_FAILED"| ODB
+
+    %% Styles
+    classDef svc fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    classDef db fill:#F5A623,stroke:#C47D0E,color:#fff
+    classDef kafka fill:#6B4FBB,stroke:#4A3490,color:#fff
+    classDef infra fill:#27AE60,stroke:#1E8449,color:#fff
+    classDef gw fill:#E74C3C,stroke:#C0392B,color:#fff
+
+    class US,PS,OS,PAY svc
+    class UDB,PDB,ODB,PAYDB db
+    class T1,T2 kafka
+    class DS infra
+    class GW gw
+```
+
 ## 🔁 Event Flow
 
 ```
